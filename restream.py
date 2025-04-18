@@ -15,6 +15,8 @@ CHANNELS = {
     "furqan": "https://www.youtube.com/@alfurqan4991/videos",
 
     "skicr": "https://www.youtube.com/@skicrtv/videos",
+    "BitcoinHyper":  "https://www.youtube.com/@BitcoinHyper/videos",
+    
 
 
 }

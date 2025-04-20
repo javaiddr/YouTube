@@ -11,19 +11,19 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
 CHANNELS = {
-    "parvinder": "https://www.youtube.com/@pravindersheoran",
-    "vallathorukatha": "https://www.youtube.com/@babu_ramachandran/videos",
-    "ddm": "https://www.youtube.com/@ddmalayalamtv/videos",
-    "furqan": "https://youtube.com/@alfurqan4991/videos",
-    "skicr": "https://youtube.com/@skicrtv/videos",
-    "dhruvrathee": "https://youtube.com/@dhruvrathee/videos",
-    "safari": "https://youtube.com/@safaritvlive/videos",
-    "sunnahdebate": "https://youtube.com/@sunnahdebate1438/videos",
-    "sunnxt": "https://youtube.com/@sunnxtmalayalam/videos",
-    "movieworld": "https://youtube.com/@movieworldmalayalammovies/videos",
-    "comedy": "https://youtube.com/@malayalamcomedyscene5334/videos",
-    "studyiq": "https://youtube.com/@studyiqiasenglish/videos",
-    "vijayakumarblathur": "https://youtube.com/@vijayakumarblathur/videos",
+  "bitcoinhyper": "https://www.youtube.com/@BitcoinHyper/videos",
+    "cryptoaman": "https://www.youtube.com/@CryptoAman/videos",
+ "studyiqias": "https://www.youtube.com/@StudyIQEducationLtd/videos",
+ "thecrediblehistory": "https://www.youtube.com/@TheCredibleHistory/videos",
+ "ravish": "https://www.youtube.com/@ravishkumar.official/videos",
+ "themoonshow": "https://www.youtube.com/@TheMoon/videos",
+ "cryptobanter": "https://www.youtube.com/@TheMoon/videos",
+ "bitinning": "https://www.youtube.com/@Bitinning/videos",
+ "pushpendra": "https://www.youtube.com/@PUSHPENDRASINGHDIGITAL/videos",
+ "cryptoindia": "https://www.youtube.com/@cryptoindia/videos",
+ "bitcoinexpertind": "https://www.youtube.com/@BitcoinExpertIndia/videos",
+ "crypto200": "https://www.youtube.com/@CRYPTO200EARNING/videos",
+"wiseadvice": "https://www.youtube.com/@WISEADVICEE/videos",
 }
 
 VIDEO_CACHE = {name: {"url": None, "last_checked": 0} for name in CHANNELS}

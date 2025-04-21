@@ -33,6 +33,11 @@ CHANNELS = {
  "crypto200": "https://www.youtube.com/@CRYPTO200EARNING/videos",
 "wiseadvice": "https://www.youtube.com/@WISEADVICEE/videos",
   "RazaGraphy": "https://www.youtube.com/@RazaGraphyUnscripted/videos",
+    "MayankKharayat": "https://www.youtube.com/results?search_query=mayank+kharayat/videos",
+    "DhruvRathee": "https://www.youtube.com/@dhruvrathee/videos",
+    "Azadbol": "https://www.youtube.com/@AZADBOLINDIA/videos",
+    "GlobalRashid": "https://www.youtube.com/@GlobalRashid/videos",
+    "Open4profit": "https://www.youtube.com/@Open4Profit/videos",
 }
 
 VIDEO_CACHE = {name: {"url": None, "last_checked": 0} for name in CHANNELS}

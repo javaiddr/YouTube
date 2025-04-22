@@ -1,4 +1,4 @@
-from flask import Flask, Response, send_file, request
+from flask import Flask, Response, request
 import subprocess
 import json
 import os
@@ -11,15 +11,15 @@ import random
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
-# Interval settings (hardcoded)
-REFRESH_INTERVAL = 900        # 15 minutes — fetch latest video URLs
-RECHECK_INTERVAL = 1800       # 30 minutes — re-download & convert if outdated
-CLEANUP_INTERVAL = 1800       # 30 minutes — cleanup old files
-EXPIRE_AGE = 10800            # 3 hours — how old files must be to delete
+# TEMP: Speed up for testing
+REFRESH_INTERVAL = 600       # Every 10 minute
+RECHECK_INTERVAL = 1200       # Every 20 minutes
+CLEANUP_INTERVAL = 1800      # Every 30 minutes
+EXPIRE_AGE = 7200            # Keep files for 2 hours
 
 CHANNELS = {
-    
-"bitcoinhyper": "https://www.youtube.com/@BitcoinHyper/videos",
+
+   "bitcoinhyper": "https://www.youtube.com/@BitcoinHyper/videos",
     "cryptoaman": "https://www.youtube.com/@CryptoAman/videos",
  "studyiqias": "https://www.youtube.com/@StudyIQEducationLtd/videos",
  "thecrediblehistory": "https://www.youtube.com/@TheCredibleHistory/videos",
@@ -38,13 +38,21 @@ CHANNELS = {
     "Azadbol": "https://www.youtube.com/@AZADBOLINDIA/videos",
     "GlobalRashid": "https://www.youtube.com/@GlobalRashid/videos",
     "Open4profit": "https://www.youtube.com/@Open4Profit/videos",
+    "DigitalMoneyGuru": "https://www.youtube.com/@MoneyGuruDigital/videos",
+    "MakeMoneyGuru": "https://www.youtube.com/@MakeMoneyGuruBitcoinForex/videos",
+    
 }
 
-VIDEO_CACHE = {name: {"url": None, "last_checked": 0} for name in CHANNELS}
+VIDEO_CACHE = {
+    name: {"url": None, "last_checked": 0, "thumbnail": ""}
+    for name in CHANNELS
+}
+
+LAST_VIDEO_ID = {name: None for name in CHANNELS}  # To track the last video ID for each channel
+
 TMP_DIR = Path("/tmp/ytmp3")
 TMP_DIR.mkdir(exist_ok=True)
 
-# Cleanup old files older than EXPIRE_AGE (3 hours)
 def cleanup_old_files():
     while True:
         now = time.time()
@@ -57,95 +65,94 @@ def cleanup_old_files():
                     logging.warning(f"Could not delete {f}: {e}")
         time.sleep(CLEANUP_INTERVAL)
 
-# Periodic refresh of latest video URLs (every 15 mins)
+def fetch_latest_video_url(name, channel_url):
+    try:
+        result = subprocess.run([
+            "yt-dlp",
+            "--dump-single-json",
+            "--playlist-end", "1",
+            "--cookies", "/mnt/data/cookies.txt",
+            "--user-agent", "Mozilla/5.0",
+            channel_url
+        ], capture_output=True, text=True, check=True)
+
+        data = json.loads(result.stdout)
+        video = data["entries"][0]
+        video_id = video["id"]
+        # Use video thumbnail if available
+        thumbnail_url = video.get("thumbnail", "")
+        return f"https://www.youtube.com/watch?v={video_id}", thumbnail_url, video_id
+    except Exception as e:
+        logging.error(f"Error fetching video from {channel_url}: {e}")
+        return None, None, None
+
+def download_and_convert(channel, video_url):
+    final_path = TMP_DIR / f"{channel}.mp3"
+    if final_path.exists():
+        return final_path
+    if not video_url:
+        return None
+    try:
+        subprocess.run([
+            "yt-dlp",
+            "-f", "bestaudio",
+            "--output", str(TMP_DIR / f"{channel}.%(ext)s"),
+            "--cookies", "/mnt/data/cookies.txt",
+            "--user-agent", "Mozilla/5.0",
+            "--postprocessor-args", "-ar 22050 -ac 1 -b:a 40k",
+            "--extract-audio",
+            "--audio-format", "mp3",
+            video_url
+        ], check=True)
+        return final_path if final_path.exists() else None
+    except Exception as e:
+        logging.error(f"Error converting {channel}: {e}")
+        partial = final_path.with_suffix(".mp3.part")
+        if partial.exists():
+            partial.unlink()
+        return None
+
 def update_video_cache_loop():
     while True:
         for name, url in CHANNELS.items():
-            video_url = fetch_latest_video_url(url)
-            if video_url:
-                VIDEO_CACHE[name]["url"] = video_url
-                VIDEO_CACHE[name]["last_checked"] = time.time()
-                # Proactively download and convert
-                download_and_convert(name, video_url)
-            # Random sleep to avoid rate-limiting (between 5-10 seconds)
+            video_url, thumbnail, video_id = fetch_latest_video_url(name, url)
+            if video_url and video_id:
+                if LAST_VIDEO_ID[name] != video_id:
+                    LAST_VIDEO_ID[name] = video_id
+                    VIDEO_CACHE[name]["url"] = video_url
+                    VIDEO_CACHE[name]["last_checked"] = time.time()
+                    VIDEO_CACHE[name]["thumbnail"] = thumbnail
+                    download_and_convert(name, video_url)
             time.sleep(random.randint(5, 10))
         time.sleep(REFRESH_INTERVAL)
 
-# Background pre-download of MP3s (every 30 mins)
 def auto_download_mp3s():
     while True:
         for name, data in VIDEO_CACHE.items():
             video_url = data.get("url")
             if video_url:
                 mp3_path = TMP_DIR / f"{name}.mp3"
-                # Skip if file exists and is recent
                 if not mp3_path.exists() or time.time() - mp3_path.stat().st_mtime > RECHECK_INTERVAL:
                     logging.info(f"Pre-downloading {name}")
                     download_and_convert(name, video_url)
-            # Random sleep to avoid rate-limiting (between 5-10 seconds)
             time.sleep(random.randint(5, 10))
         time.sleep(RECHECK_INTERVAL)
-
-def fetch_latest_video_url(channel_url):
-    try:
-        result = subprocess.run([
-            "yt-dlp", "--flat-playlist", "--playlist-end", "1",
-            "--dump-single-json", "--cookies", "/mnt/data/cookies.txt", channel_url
-        ], capture_output=True, text=True, check=True)
-        data = json.loads(result.stdout)
-        video_id = data["entries"][0]["id"]
-        
-        # Random delay to avoid rate-limiting (between 5-10 seconds)
-        time.sleep(random.randint(5, 10))
-        
-        return f"https://www.youtube.com/watch?v={video_id}"
-    except Exception as e:
-        logging.error(f"Error fetching video from {channel_url}: {e}")
-        return None
-
-def download_and_convert(channel, video_url):
-    final_path = TMP_DIR / f"{channel}.mp3"
-    yt_output = TMP_DIR / f"{channel}.mp3"
-
-    if final_path.exists():
-        return final_path
-
-    if not video_url:
-        logging.warning(f"Skipping download for {channel} because video URL is not available.")
-        return None
-
-    try:
-        subprocess.run([
-    "yt-dlp",
-    "-f", "bestaudio",
-    "--output", str(TMP_DIR / f"{channel}.%(ext)s"),
-    "--cookies", "/mnt/data/cookies.txt",
-    "--postprocessor-args", "-ar 22050 -ac 1 -b:a 40k",
-    "--extract-audio",
-    "--audio-format", "mp3",
-    video_url
-], check=True)
-
-        return final_path if final_path.exists() else None
-    except Exception as e:
-        logging.error(f"Error converting {channel}: {e}")
-        # Cleanup partial
-        partial = final_path.with_suffix(".mp3.part")
-        if partial.exists():
-            partial.unlink()
-        return None
 
 @app.route("/<channel>.mp3")
 def stream_mp3(channel):
     if channel not in CHANNELS:
         return "Channel not found", 404
 
-    video_url = VIDEO_CACHE[channel].get("url") or fetch_latest_video_url(CHANNELS[channel])
+    video_url = VIDEO_CACHE[channel].get("url")
     if not video_url:
-        return "Unable to fetch video", 500
-
-    VIDEO_CACHE[channel]["url"] = video_url
-    VIDEO_CACHE[channel]["last_checked"] = time.time()
+        video_url, thumbnail, video_id = fetch_latest_video_url(channel, CHANNELS[channel])
+        if not video_url:
+            return "Unable to fetch video", 500
+        if video_id and LAST_VIDEO_ID[channel] != video_id:
+            LAST_VIDEO_ID[channel] = video_id
+            VIDEO_CACHE[channel]["url"] = video_url
+            VIDEO_CACHE[channel]["thumbnail"] = thumbnail
+            VIDEO_CACHE[channel]["last_checked"] = time.time()
 
     mp3_path = download_and_convert(channel, video_url)
     if not mp3_path or not mp3_path.exists():
@@ -176,10 +183,8 @@ def stream_mp3(channel):
             'Content-Range': f'bytes {byte1}-{byte2}/{file_size}',
             'Content-Length': str(length)
         })
-
         return Response(chunk, status=206, headers=headers)
 
-    # No Range header, serve full content
     with open(mp3_path, 'rb') as f:
         data = f.read()
     headers['Content-Length'] = str(file_size)
@@ -187,9 +192,24 @@ def stream_mp3(channel):
 
 @app.route("/")
 def index():
-    files = list(TMP_DIR.glob("*.mp3"))
-    links = [f'<li><a href="/{f.stem}.mp3">{f.stem}.mp3</a> (created: {time.ctime(f.stat().st_mtime)})</li>' for f in files]
-    return f"<h3>Available Streams</h3><ul>{''.join(links)}</ul>"
+    html = "<h3>Available Streams</h3><ul>"
+
+    def get_mtime(channel):
+        f = TMP_DIR / f"{channel}.mp3"
+        return f.stat().st_mtime if f.exists() else 0
+
+    for channel in sorted(CHANNELS, key=get_mtime, reverse=True):
+        mp3_path = TMP_DIR / f"{channel}.mp3"
+        if not mp3_path.exists():
+            continue
+        thumbnail = VIDEO_CACHE[channel].get("thumbnail", "")
+        if not thumbnail:
+            thumbnail = "https://via.placeholder.com/30?text=YT"
+        html += f'<li style="margin-bottom:10px;"><img src="{thumbnail}" loading="lazy" style="height:80px; width: 120px; object-fit: cover; vertical-align:middle; margin-right:10px;">' \
+                f'<a href="/{channel}.mp3">{channel}</a> <small>({time.ctime(mp3_path.stat().st_mtime)})</small></li>'
+
+    html += "</ul>"
+    return html
 
 # Start background threads
 threading.Thread(target=update_video_cache_loop, daemon=True).start()
